@@ -5,9 +5,7 @@
 #include<map>
 #include<fstream>
 #include<algorithm>
-
- 
-
+#include<assert.h>
 
 namespace light_xgboost{
 struct Feature{
@@ -32,15 +30,13 @@ public:
      return value < split_weight;
     }
     bool parse(const std::string& line){
-         if(leaf_line(line)){
-           //7:leaf=29.2258
+         if(leaf_(line)){
             if(-1 == sscanf(line.c_str(),"%d:leaf=%f", &nid, &value)){
                std::cout << "leaf error" << std::endl;
                return false;
             }
             is_leaf = true;
          }else{
-		    //3:[f2<10000] yes=7,no=8,missing=7
             char cond_char = '<';
             if(-1 == sscanf(line.c_str(),"%d:[f%d%c%f] yes=%d,no=%d,missing=%d", &nid, &fidx, &cond_char, &value, &yes, &no, &missing))
             {
@@ -58,16 +54,8 @@ public:
        return true;
     }
 
-    bool leaf_line(const std::string& line){
+    bool leaf_(const std::string& line){
          size_t found = line.find("leaf");
-         return found != std::string::npos;
-    }
-    bool parse_leaf(const std::string& line){
-    
-    }
-    bool cond_line(const std::string& line){
-         //TODO: trick
-         size_t found = line.find("[");
          return found != std::string::npos;
     }
     void print(){
@@ -83,10 +71,9 @@ public:
 class BoostTree{
     private:
         std::vector<Node> nodes;
-        bool predict_impl(const std::map<int, float>& fmap,int i, float& value){
+        void predict_impl(const std::map<int, float>& fmap,int i, float& value){
             if(nodes[i].is_leaf){
                 value = nodes[i].value;
-                return true;
             }else{
                 std::map<int, float>::const_iterator it = fmap.find(nodes[i].fidx);
                 if(it == fmap.end()){
@@ -100,7 +87,7 @@ class BoostTree{
             }
         }
     public:
-        bool predict(std::map<int,float>& fmap, float& value){
+        void predict(std::map<int,float>& fmap, float& value){
              return predict_impl(fmap, 0, value);
         }
         void push_node(const Node& node){
@@ -116,7 +103,7 @@ class BoostTree{
         static bool comp(const Node& a,const Node& b){
             return a.nid < b.nid;
         } 
-        bool nice(){
+        void nice(){
             sort(nodes.begin(),nodes.end(),BoostTree::comp);
         }
 };
@@ -125,7 +112,7 @@ class Trees{
      private:
          std::vector<BoostTree> trees;
 
-        bool head_line(const std::string& line){
+        bool head_(const std::string& line){
            size_t found = line.find("booster");
            return found != std::string::npos;
         }
@@ -136,7 +123,7 @@ class Trees{
              }
         }
 
-         bool predict(const std::vector<Feature>& features, float& value){
+         void predict(const std::vector<Feature>& features, float& value){
              //init
              value = 0.0;
              //build map
@@ -147,16 +134,11 @@ class Trees{
              //predict
              for(size_t i = 0; i < trees.size(); i ++){
                  float tree_res = 0.0;
-                 if(trees[i].predict(fmap, tree_res)){
-                    value += tree_res;
-                 }else{
-                     return false;
-                 }
+                 trees[i].predict(fmap, tree_res);
+                 value += tree_res;
              }
-             return true;
         }
 
-    
         std::string& trim(std::string &line)   
         {  
             if (line.empty())   
@@ -167,13 +149,13 @@ class Trees{
             line.erase(line.find_last_not_of("	 ") + 1);  
             return line; 
         }
-        bool load_nice_file(const std::string& file_name){
+        void load_nice_file(const std::string& file_name){
                 std::ifstream in_file(file_name.c_str());
                 std::string line;
                 while(getline(in_file, line))
                 {
                      trim(line);
-                     if(head_line(line)){
+                     if(head_(line)){
                          if(trees.size() != 0) {
                               trees[trees.size()-1].nice();
                          }
@@ -181,7 +163,7 @@ class Trees{
                      }
                      else{
                           Node nd;
-                          nd.parse(line);
+                          assert(nd.parse(line));
                           trees[trees.size()-1].push_node(nd);
                      }
                 }
